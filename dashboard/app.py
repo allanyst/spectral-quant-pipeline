@@ -129,8 +129,8 @@ filtered = summary_df[summary_df["mix_type"].isin(mix_filter)]
 element = st.selectbox("Element", ["Na", "Mg", "Al", "Fe", "Si", "P"])
 el_l = element.lower()
 
-x_data = filtered[f"conc_{el_l}"].values
-y_data = filtered[f"net_{el_l}"].values
+x_data = filtered[f"conc_{el_l}"].astype(float).values
+y_data = filtered[f"net_{el_l}"].astype(float).values
 mask = x_data > 0
 coeffs = np.polyfit(x_data[mask], y_data[mask], 1) if mask.sum() > 1 else [0, 0]
 x_line = np.linspace(x_data[mask].min(), x_data[mask].max(), 50) if mask.sum() > 1 else []
