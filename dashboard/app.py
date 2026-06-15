@@ -132,9 +132,9 @@ el_l = element.lower()
 x_data = filtered[f"conc_{el_l}"].values
 y_data = filtered[f"net_{el_l}"].values
 mask = x_data > 0
-coeffs = _np.polyfit(x_data[mask], y_data[mask], 1) if mask.sum() > 1 else [0, 0]
-x_line = _np.linspace(x_data[mask].min(), x_data[mask].max(), 50) if mask.sum() > 1 else []
-y_line = _np.polyval(coeffs, x_line)
+coeffs = np.polyfit(x_data[mask], y_data[mask], 1) if mask.sum() > 1 else [0, 0]
+x_line = np.linspace(x_data[mask].min(), x_data[mask].max(), 50) if mask.sum() > 1 else []
+y_line = np.polyval(coeffs, x_line)
 
 COLOR_MAP = {"unary": "#636EFA", "binary": "#EF553B", "ternary": "#00CC96"}
 fig2 = go.Figure()
