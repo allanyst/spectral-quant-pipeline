@@ -1,0 +1,19 @@
+name: spectral_quant
+version: "1.0.0"
+config-version: 2
+
+profile: spectral_quant
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  spectral_quant:
+    staging:
+      +materialized: view
+      +schema: silver
+    marts:
+      +materialized: table
+      +schema: gold

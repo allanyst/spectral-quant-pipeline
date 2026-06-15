@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: fact_spectral_peaks
+    description: "Net peak intensities per element per spectrum (background-subtracted)"
+    columns:
+      - name: spectrum_id
+        tests: [not_null, unique]
+      - name: sample_id
+        tests: [not_null]
+      - name: mix_type
+        tests:
+          - accepted_values:
+              values: [unary, binary, ternary]
+      - name: net_na
+        tests: [not_null]
+      - name: net_fe
+        tests: [not_null]
+
+  - name: fact_sample_summary
+    description: "Per-sample concentration labels + spectral features for PLS training"
+    columns:
+      - name: spectrum_id
+        tests: [not_null, unique]
+      - name: total_counts
+        tests: [not_null]

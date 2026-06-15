@@ -1,0 +1,12 @@
+spectral_quant:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: postgres
+      port: 5432
+      user: xrf
+      password: xrf_pass
+      dbname: spectra_db
+      schema: silver
+      threads: 4

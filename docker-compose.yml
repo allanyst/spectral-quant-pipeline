@@ -1,0 +1,97 @@
+x-airflow-common: &airflow-common
+  build: ./airflow
+  environment: &airflow-env
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://xrf:xrf_pass@postgres:5432/spectra_db
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__WEBSERVER__SECRET_KEY: spectral_secret_key
+    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+    XRF_DB_URL: postgresql://xrf:xrf_pass@postgres:5432/spectra_db
+    MODEL_PATH: /opt/airflow/models/pls_model.pkl
+    AIRFLOW__LOGGING__DAG_PROCESSOR_MANAGER_LOG_LOCATION: /opt/airflow/logs/dag_processor_manager/dag_processor_manager.log
+  volumes: &airflow-vols
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./src:/opt/airflow/src
+    - ./models:/opt/airflow/models
+    - /var/run/docker.sock:/var/run/docker.sock
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: xrf
+      POSTGRES_PASSWORD: xrf_pass
+      POSTGRES_DB: spectra_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - ./docker/init-db:/docker-entrypoint-initdb.d
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xrf -d spectra_db"]
+      interval: 10s
+      retries: 5
+
+  airflow-init:
+    <<: *airflow-common
+    command: >-
+      bash -c "airflow db migrate && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@xrf.com"
+
+  airflow-webserver:
+    <<: *airflow-common
+    ports:
+      - "8082:8080"
+    group_add:
+      - "1001"
+    command: webserver
+
+  airflow-scheduler:
+    <<: *airflow-common
+    group_add:
+      - "1001"
+    command: scheduler
+
+  dbt:
+    image: python:3.11-slim
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      XRF_DB_URL: postgresql://xrf:xrf_pass@postgres:5432/spectra_db
+    volumes:
+      - ./dbt:/opt/dbt
+      - ./dbt/profiles:/root/.dbt
+    working_dir: /opt/dbt
+    command: >-
+      bash -c "pip install 'dbt-core==1.8.7' 'dbt-postgres==1.8.2' -q && tail -f /dev/null"
+
+  api:
+    build: ./api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      XRF_DB_URL: postgresql://xrf:xrf_pass@postgres:5432/spectra_db
+      MODEL_PATH: /app/models/pls_model.pkl
+    volumes:
+      - ./models:/app/models
+    ports:
+      - "8001:8000"
+
+  dashboard:
+    build: ./dashboard
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      XRF_DB_URL: postgresql://xrf:xrf_pass@postgres:5432/spectra_db
+      API_URL: http://api:8000
+    ports:
+      - "8502:8501"
+
+volumes:
+  pg_data:

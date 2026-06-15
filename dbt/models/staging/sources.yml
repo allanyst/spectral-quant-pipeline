@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: bronze
+    tables:
+      - name: xrf_spectra
+        description: "Raw XRF spectra with FLOAT[] arrays for 2θ grid and intensities"
+        columns:
+          - name: spectrum_id
+            tests: [not_null, unique]
+          - name: sample_id
+            tests: [not_null, unique]
+          - name: mix_type
+            tests:
+              - not_null
+              - accepted_values:
+                  values: [unary, binary, ternary]
+          - name: n_channels
+            tests: [not_null]
