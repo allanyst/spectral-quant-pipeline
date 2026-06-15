@@ -129,13 +129,32 @@ filtered = summary_df[summary_df["mix_type"].isin(mix_filter)]
 element = st.selectbox("Element", ["Na", "Mg", "Al", "Fe", "Si", "P"])
 el_l = element.lower()
 
-fig2 = px.scatter(
-    filtered,
-    x=f"conc_{el_l}", y=f"net_{el_l}",
-    color="mix_type",
-    trendline="ols",
-    labels={f"conc_{el_l}": f"True [%] {element}", f"net_{el_l}": "Net peak intensity"},
+x_data = filtered[f"conc_{el_l}"].values
+y_data = filtered[f"net_{el_l}"].values
+mask = x_data > 0
+coeffs = _np.polyfit(x_data[mask], y_data[mask], 1) if mask.sum() > 1 else [0, 0]
+x_line = _np.linspace(x_data[mask].min(), x_data[mask].max(), 50) if mask.sum() > 1 else []
+y_line = _np.polyval(coeffs, x_line)
+
+COLOR_MAP = {"unary": "#636EFA", "binary": "#EF553B", "ternary": "#00CC96"}
+fig2 = go.Figure()
+for mt in ["unary", "binary", "ternary"]:
+    sub = filtered[filtered["mix_type"] == mt]
+    fig2.add_trace(go.Scatter(
+        x=sub[f"conc_{el_l}"], y=sub[f"net_{el_l}"],
+        mode="markers", name=mt,
+        marker=dict(color=COLOR_MAP[mt], size=6),
+    ))
+if len(x_line):
+    fig2.add_trace(go.Scatter(
+        x=x_line, y=y_line,
+        mode="lines", name="OLS fit",
+        line=dict(color="gray", dash="dash", width=1.5),
+    ))
+fig2.update_layout(
     title=f"{element} — concentration vs. net peak intensity",
+    xaxis_title=f"True concentration {element}",
+    yaxis_title="Net peak intensity",
     height=380,
 )
 st.plotly_chart(fig2, use_container_width=True)
