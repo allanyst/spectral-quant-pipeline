@@ -133,25 +133,27 @@ Response:
 
 ## Setup
 
-**Prerequisites:** Docker, Docker Compose, Python 3.11
+**Prerequisites:** Docker, Docker Compose, Anaconda/Miniconda
 
 ```bash
 git clone git@gitlab.com:plasmallan/spectral-quant-pipeline.git
 cd spectral-quant-pipeline
+
+# Create local environment (used for ingestion and model training scripts)
+conda env create -f environment.yml
+conda activate spectral-quant
 
 # Start PostgreSQL and dbt
 docker compose up -d postgres dbt
 sleep 15
 
 # Generate synthetic spectra and load Bronze
-pip install psycopg2-binary numpy
 python src/ingest_bronze.py
 
 # Run Silver and Gold transformations
 docker exec spectral-quant-pipeline-dbt-1 dbt run --profiles-dir /root/.dbt
 
 # Train PLS model
-pip install scikit-learn
 python models/pls_calibration.py
 
 # Start full stack
