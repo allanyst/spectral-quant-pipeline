@@ -1,0 +1,11 @@
+name: spectral-quant
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - psycopg2-binary==2.9.9
+    - scikit-learn==1.5.0
+    - numpy==1.26.4
+    - pandas==2.2.2
