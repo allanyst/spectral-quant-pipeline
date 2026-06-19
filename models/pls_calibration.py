@@ -58,13 +58,16 @@ def load_training_data() -> tuple[np.ndarray, np.ndarray, list[str]]:
     return X, Y, sample_ids
 
 
-def select_n_components(X: np.ndarray, Y: np.ndarray) -> int:
-    """Choose n_components via 5-fold CV minimizing mean RMSECV across all elements."""
+def select_n_components(X: np.ndarray, Y: np.ndarray) -> tuple[int, dict[str, float]]:
+    """
+    Choose n_components via 5-fold CV minimizing mean RMSECV across all elements.
+    Returns (best_n, rmsecv_per_element) at the optimal n_components.
+    """
     scaler = StandardScaler()
     X_sc = scaler.fit_transform(X)
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
-    best_n, best_rmsecv = 1, np.inf
+    best_n, best_rmsecv, best_Y_cv = 1, np.inf, None
     for n in range(1, MAX_COMPONENTS + 1):
         pls = PLSRegression(n_components=n, scale=False)
         Y_cv = cross_val_predict(pls, X_sc, Y, cv=kf)
@@ -73,8 +76,13 @@ def select_n_components(X: np.ndarray, Y: np.ndarray) -> int:
             for i in range(Y.shape[1])
         ])
         if rmsecv < best_rmsecv:
-            best_rmsecv, best_n = rmsecv, n
-    return best_n
+            best_rmsecv, best_n, best_Y_cv = rmsecv, n, Y_cv
+
+    rmsecv_per_element = {
+        el: round(float(np.sqrt(mean_squared_error(Y[:, i], best_Y_cv[:, i]))), 6)
+        for i, el in enumerate(ELEMENTS)
+    }
+    return best_n, rmsecv_per_element
 
 
 def train_and_save() -> dict:
@@ -83,7 +91,7 @@ def train_and_save() -> dict:
     print(f"  X: {X.shape}  Y: {Y.shape}")
 
     print("Selecting optimal n_components via 5-fold CV...")
-    n_comp = select_n_components(X, Y)
+    n_comp, rmsecv_per_element = select_n_components(X, Y)
     print(f"  Best n_components: {n_comp}")
 
     scaler = StandardScaler()
@@ -103,18 +111,27 @@ def train_and_save() -> dict:
         print(f"  {el.upper():2s}  R²={r2:.4f}  RMSE={rmse:.6f}")
 
     artifact = {
-        "model":        pls,
-        "scaler":       scaler,
-        "n_components": n_comp,
-        "n_samples":    len(sample_ids),
-        "n_channels":   X.shape[1],
-        "elements":     ELEMENTS,
-        "metrics":      metrics,
+        "model":               pls,
+        "scaler":              scaler,
+        "n_components":        n_comp,
+        "n_samples":           len(sample_ids),
+        "n_channels":          X.shape[1],
+        "elements":            ELEMENTS,
+        "metrics":             metrics,
+        "rmsecv_per_element":  rmsecv_per_element,
     }
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(MODEL_PATH, "wb") as f:
         pickle.dump(artifact, f)
+
+    # Export RMSECV for UQaaS consumption
+    rmsecv_path = MODEL_PATH.parent / "rmsecv.json"
+    import json
+    with open(rmsecv_path, "w") as f:
+        json.dump(rmsecv_per_element, f, indent=2)
+    print(f"RMSECV exported to {rmsecv_path}")
+
     print(f"Model saved to {MODEL_PATH}")
     return metrics
 

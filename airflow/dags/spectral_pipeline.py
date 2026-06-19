@@ -33,6 +33,54 @@ def run_pls_training(**context):
         print(f"  {el.upper()}: R²={m['r2']:.4f}  RMSE={m['rmse']:.6f}")
 
 
+def report_to_uqaas(**context):
+    """
+    POST full uncertainty budget to UQaaS for sodium using:
+    - RMSECV from latest PLS training (models/rmsecv.json)
+    - Representative Na measurements (3 repeats)
+    - CRM certificate uncertainty
+    """
+    import json, urllib.request
+    from pathlib import Path
+
+    rmsecv_path = Path("/opt/airflow/models/rmsecv.json")
+    if not rmsecv_path.exists():
+        print("rmsecv.json not found — skipping UQaaS report")
+        return
+
+    with open(rmsecv_path) as f:
+        rmsecv = json.load(f)
+
+    uqaas_url = "http://uqaas-api:8000/wdxrf/full_budget"
+
+    payload = {
+        "element": "Na",
+        "measurements": [0.142, 0.141, 0.143],   # normalized intensity (3 repeats)
+        "rmsecv": rmsecv["na"],
+        "u_cert": 0.005,                          # CRM u_cert (k=2 certificate)
+        "k_cert": 2.0,
+        "n_simulations": 50_000,
+    }
+
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        uqaas_url, data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=30)
+        result = json.loads(resp.read())
+        print(f"UQaaS Na budget id={result['id']}")
+        print(f"  u_combined    = {result['u_combined']:.6f}")
+        print(f"  u_expanded(k=2) = {result['u_expanded_k2']:.6f}")
+        for c in result["components"]:
+            print(f"  {c['name']}: u={c['u_standard']:.6f} ({c['fraction_pct']:.1f}%)")
+    except Exception as exc:
+        # Non-blocking: UQaaS being down must not fail the pipeline
+        print(f"UQaaS report skipped: {exc}")
+
+
 with DAG(
     dag_id="spectral_pipeline",
     start_date=datetime(2025, 1, 1),
@@ -61,4 +109,11 @@ with DAG(
         python_callable=run_pls_training,
     )
 
-    ingest_task >> dbt_run_task >> dbt_test_task >> pls_task
+    uqaas_task = PythonOperator(
+        task_id="report_to_uqaas",
+        python_callable=report_to_uqaas,
+        retries=1,
+        retry_delay=timedelta(seconds=5),
+    )
+
+    ingest_task >> dbt_run_task >> dbt_test_task >> pls_task >> uqaas_task
